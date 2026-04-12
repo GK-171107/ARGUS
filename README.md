@@ -74,6 +74,10 @@ python base.py
 
 ## Status
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 Active development. First year CSE undergrad building this as a research + portfolio project.
 
 ---
