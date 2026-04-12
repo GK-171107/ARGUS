@@ -1,5 +1,9 @@
 # ARGUS — Argumentative Graph & Understanding System
 
+<p align="center">
+  <img src="assets/banner.png" alt="ARGUS Banner" width="100%">
+</p>
+
 > Cut through any Reddit thread in seconds. No endless scrolling.
 
 ARGUS is a graph-based argument mapping engine for online conversations. 
