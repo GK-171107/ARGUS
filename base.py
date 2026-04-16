@@ -16,51 +16,70 @@ line = "=" * 100
 subline = "-" * 100
 wrap_width = 85
 
+
+def extract_replies_recursively(comment_or_reply, depth=0):
+
+    all_replies = []
+
+    replies = comment_or_reply['data']['replies']
+
+    if replies == "":
+        return all_replies
+
+    children = replies['data']['children']
+
+    for child in children:
+        if child['kind'] == 't1':
+            reply_dict = {
+                'author': child['data']['author'],
+                'body': child['data']['body'],
+                'score': child['data']['score'],
+                'depth': depth
+            }
+            all_replies.append(reply_dict)
+
+            # Recursive call — get nested replies of this reply
+            nested_replies = extract_replies_recursively(child, depth=depth + 1)
+            all_replies.extend(nested_replies)
+
+    return all_replies
+
+
 for comment in comments:
     if comment['kind'] == 't1':
 
-        replies = comment['data']['replies']
         author = comment['data']['author']
         body = comment['data']['body']
         score = comment['data']['score']
 
         if body in ["[deleted]", "[removed]"]:
             continue
-
-        if author == author == "AutoModerator":
+        if author == "AutoModerator":
             continue
 
         print(line)
-        print(f"COMMENT #{c+1}")
+        print(f"COMMENT #{c + 1}")
         print(f"Author : {author}")
         print(f"Score  : {score}")
         print("Content:")
         print(textwrap.fill(body, width=wrap_width))
         print(line)
 
-        if replies != "":
-            children = replies['data']['children']
+        # Get ALL replies (including nested to any depth)
+        all_replies = extract_replies_recursively(comment, depth=1)
 
-            valid_replies = [
-                reply for reply in children
-                if reply['kind'] == 't1'
-            ]
+        if all_replies:
+            print("REPLIES (all depths)")
+            print(subline)
 
-            if valid_replies:
-                print("REPLIES")
+            for i, reply in enumerate(all_replies, start=1):
+                indent = "  " * (reply['depth'] - 1)
+                print(f"{indent}[{i}] {reply['author']} | Score: {reply['score']}")
+                print(textwrap.fill(reply['body'], width=wrap_width - len(indent),
+                                    initial_indent=indent + "    ",
+                                    subsequent_indent=indent + "    "))
                 print(subline)
-
-                for i, reply in enumerate(valid_replies, start=1):
-                    r_author = reply['data']['author']
-                    r_body = reply['data']['body']
-                    r_score = reply['data']['score']
-                    r += 1
-
-                    print(f"[{i}] {r_author} | Score: {r_score}")
-                    print(textwrap.fill(r_body, width=wrap_width,
-                                        initial_indent="    ",
-                                        subsequent_indent="    "))
-                    print(subline)
+                r += 1
 
         print("\n")
         c += 1
