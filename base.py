@@ -1,24 +1,8 @@
 import requests
-import textwrap
-
-url = "https://www.reddit.com/r/Btechtards/comments/1rox0x3/i_dont_understand_ai_wont_kill_software_jobs/.json"
-headers = {"User-Agent": "ARGUS/0.1"}
-
-response = requests.get(url, headers=headers)
-data = response.json()
-comments = data[1]['data']['children']
-
-c = 0
-r = 0
-
-# styling
-line = "=" * 100
-subline = "-" * 100
-wrap_width = 85
+import json
 
 
 def extract_replies_recursively(comment_or_reply, depth=0):
-
     all_replies = []
 
     replies = comment_or_reply['data']['replies']
@@ -37,52 +21,128 @@ def extract_replies_recursively(comment_or_reply, depth=0):
                 'depth': depth
             }
             all_replies.append(reply_dict)
-
-            # Recursive call — get nested replies of this reply
             nested_replies = extract_replies_recursively(child, depth=depth + 1)
             all_replies.extend(nested_replies)
 
     return all_replies
 
 
-for comment in comments:
-    if comment['kind'] == 't1':
 
-        author = comment['data']['author']
-        body = comment['data']['body']
-        score = comment['data']['score']
+def fetch_thread(url):
 
+    json_url = url + ".json"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+
+    # Fetch from Reddit
+    response = requests.get(json_url, headers=headers)
+    data = response.json()
+    comments = data[1]['data']['children']
+
+    # Process comments
+    comment_list = []
+
+    for comment in comments:
+        if comment['kind'] == 't1':
+
+            author = comment['data']['author']
+            body = comment['data']['body']
+            score = comment['data']['score']
+
+            # Create comment dict
+            comment_dict = {
+                'author': author,
+                'body': body,
+                'score': score,
+                'depth': 0,  # Top-level comments have depth 0
+                'replies': extract_replies_recursively(comment, depth=1)
+            }
+
+            comment_list.append(comment_dict)
+
+    return comment_list
+
+
+
+def clean_comments(raw_comments):
+
+    cleaned = []
+
+    for comment in raw_comments:
+        body = comment['body']
+        author = comment['author']
+
+        # Skip deleted/removed
         if body in ["[deleted]", "[removed]"]:
             continue
+
+        # Skip AutoModerator
         if author == "AutoModerator":
             continue
 
-        print(line)
-        print(f"COMMENT #{c + 1}")
-        print(f"Author : {author}")
-        print(f"Score  : {score}")
-        print("Content:")
-        print(textwrap.fill(body, width=wrap_width))
-        print(line)
+        # Skip comments under 5 words
+        if len(body.split()) < 5:
+            continue
 
-        # Get ALL replies (including nested to any depth)
-        all_replies = extract_replies_recursively(comment, depth=1)
+        # If this comment passes filters, keep it
+        # But also clean its nested replies recursively
+        cleaned_comment = comment.copy()
 
-        if all_replies:
-            print("REPLIES (all depths)")
-            print(subline)
+        if 'replies' in cleaned_comment and cleaned_comment['replies']:
+            # Recursively clean nested replies
+            cleaned_comment['replies'] = clean_comments(cleaned_comment['replies'])
 
-            for i, reply in enumerate(all_replies, start=1):
-                indent = "  " * (reply['depth'] - 1)
-                print(f"{indent}[{i}] {reply['author']} | Score: {reply['score']}")
-                print(textwrap.fill(reply['body'], width=wrap_width - len(indent),
-                                    initial_indent=indent + "    ",
-                                    subsequent_indent=indent + "    "))
-                print(subline)
-                r += 1
+        cleaned.append(cleaned_comment)
 
-        print("\n")
-        c += 1
+    return cleaned
 
-print(f"Total Valid Comments: {c}")
-print(f"Total Valid Replies: {r}")
+
+
+def save_comments(data, filename):
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+
+def count_comments(comments_list):
+    total_comments = len(comments_list)
+    total_replies = 0
+
+    for comment in comments_list:
+        if 'replies' in comment and comment['replies']:
+            replies_count, nested_count = count_comments(comment['replies'])
+            total_replies += replies_count + nested_count
+
+    return total_comments, total_replies
+
+
+
+if __name__ == "__main__":
+    # Test URL
+    url = "https://www.reddit.com/r/Btechtards/comments/1rox0x3/i_dont_understand_ai_wont_kill_software_jobs/"
+
+    print("=" * 80)
+    print("PHASE 1 — DATA COLLECTION — DAY 6")
+    print("=" * 80)
+
+    print("\n[1] Fetching thread...")
+    raw_comments = fetch_thread(url)
+    print(f"✓ Fetched {len(raw_comments)} top-level comments")
+
+    print("\n[2] Cleaning comments...")
+    cleaned = clean_comments(raw_comments)
+    print(f"✓ Cleaned down to {len(cleaned)} comments")
+
+    print("\n[3] Counting total comments and replies...")
+    c, r = count_comments(cleaned)
+    print(f"✓ Total top-level comments: {c}")
+    print(f"✓ Total replies (all depths): {r}")
+
+    print("\n[4] Saving to JSON...")
+    save_comments(cleaned, "thread_comments.json")
+    print(f"✓ Saved to thread_comments.json")
+
+    print("\n" + "=" * 80)
+    print("DONE! Check thread_comments.json")
+    print("=" * 80)
